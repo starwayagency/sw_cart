@@ -1,7 +1,7 @@
 from rest_framework import serializers
-from box.apps.sw_shop.sw_cart.models import CartItem,  FavourItem, CartItemAttribute
-from box.apps.sw_shop.sw_catalog.api.serializers import ItemDetailSerializer
-from box.core.sw_currency.models import Currency 
+from sw_cart.models import CartItem,  FavourItem, CartItemAttribute
+from sw_catalog.api.serializers import ItemDetailSerializer
+from sw_currency.models import Currency 
 
 class CartItemAttributeSerializer(serializers.ModelSerializer):
   class Meta:

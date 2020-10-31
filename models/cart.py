@@ -184,6 +184,7 @@ class Cart(models.Model):
   # prices new
 
   def get_price(self, currency=None, price_type='total_price', request=None):
+    from sw_order.models import OrderAdditionalPrice
     if not currency:
       currency = Currency.objects.get(is_main=True)
     if price_type == 'total_price':
@@ -234,6 +235,7 @@ class Cart(models.Model):
 
   @property
   def total_price(self):
+    from sw_order.models import OrderAdditionalPrice
     total_price = 0
     # for cart_item in self.items.all():
     for cart_item in CartItem.objects.filter(cart=self):

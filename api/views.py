@@ -1,9 +1,9 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse, HttpResponse
-from box.apps.sw_shop.sw_catalog.models import Item
-from box.apps.sw_shop.sw_cart.models import CartItem, FavourItem, Cart 
-from box.apps.sw_shop.sw_cart.utils import get_cart, get_cart_info
+from sw_catalog.models import Item
+from sw_cart.models import CartItem, FavourItem, Cart 
+from sw_cart.utils import get_cart, get_cart_info
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 import json 
@@ -39,7 +39,7 @@ def cart_items(request):
     return Response(data=get_cart_info(request), status=204)
 
 
-from box.core.sw_currency.models import Currency
+from sw_currency.models import Currency
 
 
 @api_view(['GET','PATCH','DELETE'])

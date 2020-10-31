@@ -1,5 +1,5 @@
 from django.contrib import admin 
-from box.apps.sw_shop.sw_cart.models import (
+from sw_cart.models import (
   Cart, CartItem, FavourItem, CartItemAttribute
 )
 from django.utils.html import format_html, mark_safe

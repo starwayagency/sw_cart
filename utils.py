@@ -1,6 +1,6 @@
-from box.apps.sw_shop.sw_cart.api.serializers import CartItemSerializer
-from box.apps.sw_shop.sw_cart.models import Cart, CartItem
-from box.core.sw_currency.models import Currency 
+from sw_cart.api.serializers import CartItemSerializer
+from sw_cart.models import Cart, CartItem
+from sw_currency.models import Currency 
 
 def get_cart(request):
 	try:

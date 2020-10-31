@@ -1,5 +1,5 @@
 from django import template
-from box.apps.sw_shop.sw_cart.utils import get_cart
+from sw_cart.utils import get_cart
 
 
 register = template.Library()
