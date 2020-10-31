@@ -1,13 +1,13 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse, HttpResponse
-from sw_shop.sw_catalog.models import Item
-from sw_shop.sw_cart.models import CartItem, FavourItem, Cart 
-from sw_shop.sw_cart.utils import get_cart, get_cart_info
+from box.apps.sw_shop.sw_catalog.models import Item
+from box.apps.sw_shop.sw_cart.models import CartItem, FavourItem, Cart 
+from box.apps.sw_shop.sw_cart.utils import get_cart, get_cart_info
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 import json 
-
+from .serializers import *
 
 @api_view(['GET','POST'])
 def check_if_item_with_attributes_is_in_cart(request):
@@ -39,16 +39,25 @@ def cart_items(request):
     return Response(data=get_cart_info(request), status=204)
 
 
+from box.core.sw_currency.models import Currency
+
+
 @api_view(['GET','PATCH','DELETE'])
 def cart_item(request, id):
   cart = get_cart(request)
   if request.method == 'GET':
     cart_item = CartItem.objects.get(id=id)
-    return Response(data=CartItemSerializer(cart_item).data, status=200)
+    return Response(data=CartItemSerializer(cart_item, context={'request':request}).data, status=200)
   elif request.method == 'PATCH':
     cart_item    = cart.change_cart_item_amount(id, request.data['quantity'])
+    currency = None 
+    currency_code = request.session.get('current_currency_code')
+    if currency_code:
+      currency = Currency.objects.get(code=currency_code)
+    cart_item_total_price = cart_item.get_price(currency, 'total_price_with_discount_with_attributes')
+    # cart_item_total_price = cart_item.total_price
     response     = {
-      "cart_item_total_price":cart_item.total_price,
+      "cart_item_total_price":cart_item_total_price, 
     }
     response.update(get_cart_info(request))
     return Response(data=response, status=202)

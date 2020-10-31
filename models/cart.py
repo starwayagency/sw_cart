@@ -1,19 +1,7 @@
-from django.db import models 
-from django.contrib.auth import get_user_model 
 from django.utils.translation import ugettext_lazy as _
-from django.utils import timezone
-from django.db.models import Sum
-
-from sw_shop.sw_catalog.models import (
-  Item, Currency, Attribute, AttributeValue, ItemAttribute, ItemAttributeValue
-)
-
-import json 
-import re
-from django.db.models import Q
-
-from sw_shop.sw_order.models import OrderAdditionalPrice
-
+from ._imports import *
+from .cart_item import CartItem 
+from .cart_item_attribute import CartItemAttribute 
 
 class Cart(models.Model):
   user    = models.ForeignKey(
@@ -70,18 +58,14 @@ class Cart(models.Model):
           value=attribute_value,
           price=attribute_value.price # TODO: забрати price, бо вона і так є у ItemAttributeValue
         )
-
+  
   def get_cart_item(self, item, attributes):
-    print(attributes)
     cart_items = CartItem.objects.filter(cart=self, item=item)
     sdf = []
     # Проходиться по всіх товарах в корзині
     for cart_item in cart_items:
       cart_item_attributes = CartItemAttribute.objects.filter(cart_item=cart_item)
-      # print("cart_item_attributes:", cart_item_attributes)
-      # print("cart_item:", cart_item)
       # Проходиться по всіх атрибутах присланих з фронту
-      # print(attributes)
       for attribute in attributes:
         item_attr  = ItemAttribute.objects.get(id=attribute['item_attribute_id'])
         if item_attr.is_option:
@@ -97,10 +81,6 @@ class Cart(models.Model):
           else:
             cart_value = cart_item_attribute.value
           # Якшо атрибут з фронта і атрибут товара в корзині співпадають ... 
-          # print()
-          # print("item_value:",item_value)
-          # print("cart_value:",cart_value)
-          # print()
           # https://stackoverflow.com/questions/45217691/django-check-if-querysets-are-equals
 
           if item_attr == cart_attr:
@@ -153,7 +133,6 @@ class Cart(models.Model):
         self.create_cart_items_with_attributes(item, quantity, attributes)
       else:
         cart_item = self.get_cart_item(item, attributes)
-        print(cart_item)
         if cart_item:
           cart_item.quantity += quantity
           cart_item.save()
@@ -190,7 +169,6 @@ class Cart(models.Model):
 
   def clear(self):
     CartItem.objects.filter(cart=self).delete()
-    # self.items.all().delete()
 
   @property
   def items_quantity(self):
@@ -202,6 +180,57 @@ class Cart(models.Model):
   @property
   def items_count(self):
     return CartItem.objects.filter(cart=self).all().count()
+
+  # prices new
+
+  def get_price(self, currency=None, price_type='total_price', request=None):
+    if not currency:
+      currency = Currency.objects.get(is_main=True)
+    if price_type == 'total_price':
+      price = 0 
+      for cart_item in CartItem.objects.filter(cart=self):
+        koef  = currency.convert(curr_from=cart_item.item.currency, curr_to=currency)
+        curr_from = cart_item.item.currency
+        ci    = cart_item.get_price(currency, "total_price_with_coupons_with_attributes_with_discount") 
+        # ci    = cart_item.get_price(currency, "total_price_with_discount_with_attributes") 
+        price += ci
+        # price = price + ci*koef
+      for additional_price in OrderAdditionalPrice.objects.all(): 
+        price = price + additional_price.price * currency.convert(curr_from=self.get_currency(), curr_to=currency)
+    elif price_type == 'discount':
+      price = 0
+      for cart_item in CartItem.objects.filter(cart=self):
+        koef  = currency.convert(curr_from=cart_item.item.currency, curr_to=currency)
+        price += cart_item.get_price(currency, 'total_discount')
+        price = price + price*koef
+    elif price_type == 'total_with_discount':
+      price = 0
+      for cart_item in CartItem.objects.filter(cart=self):
+        koef  = currency.convert(curr_from=cart_item.item.currency, curr_to=currency)
+        price += cart_item.get_price(currency, 'total_price_with_discount')
+        # price = price + price*koef
+        # ^ з цим рядком не працює
+        # | 
+    elif price_type == 'total':
+      price = 0
+      for cart_item in CartItem.objects.filter(cart=self):
+        koef  = currency.convert(curr_from=cart_item.item.currency, curr_to=currency)
+        price += cart_item.get_price(currency, 'total_price')
+        # price = price + price*koef
+        # ^ з цим рядком не працює
+        # | 
+    # todo: замовлення без купону, за мовлення з купоном
+    # elif price_type == '':
+    #   price = price 
+    # elif price_type == '':
+    #   price = price 
+    # elif price_type == '':
+    #   price = price 
+    # elif price_type == '':
+    #   price = price 
+    return price 
+
+  # prices old
 
   @property
   def total_price(self):
@@ -224,174 +253,6 @@ class Cart(models.Model):
   def currency(self):
     return Currency.objects.get(is_main=True).code
 
-
   def get_currency(self):
     return Currency.objects.get(is_main=True)
-
-
-class CartItemAttribute(models.Model):
-  cart_item = models.ForeignKey(
-    verbose_name=_("Товар в корзині"), on_delete=models.CASCADE,
-    to="sw_cart.CartItem", related_name='attributes',
-  )
-  attribute_name = models.ForeignKey(
-    to="sw_catalog.ItemAttribute", on_delete=models.CASCADE,
-    verbose_name=_("Атрибут"), unique=False,
-  )
-  value = models.ForeignKey(
-    to="sw_catalog.ItemAttributeValue", 
-    # on_delete=models.CASCADE,
-    on_delete=models.SET_NULL, blank=True, null=True,
-    verbose_name=_("Значення"), unique=False, related_name="cart_item_attributes",
-  )
-  values = models.ManyToManyField(
-    to="sw_catalog.ItemAttributeValue", verbose_name=_("Значення"), blank=True
-  )
-  price = models.FloatField(
-    verbose_name=_("Ціна"), default=0,
-    # verbose_name=_("Ціна"), null=False, blank=False, default=0,
-    # verbose_name=_("Ціна"), null=True, blank=True, default=0,
-  )
-
-  class Meta: 
-    verbose_name = _('вибраний атрибут у товара в корзині')
-    verbose_name_plural = _('вибрані атрибути у товарів в корзині')
-  
-  def __str__(self):
-    # return f'{self.cart_item.item.title}, {self.attribute_name.name}:{self.value.value}'
-    if self.attribute_name.is_option:
-      return f'{self.cart_item.item.title}, {self.attribute_name.attribute.name}:{self.values.all()}'
-    else:
-      return f'{self.cart_item.item.title}, {self.attribute_name.attribute.name}:{self.value.value.value}'
-
-
-class CartItem(models.Model):
-  ordered  = models.BooleanField(
-     verbose_name=("Замовлено"), default=False,
-    )
-  cart     = models.ForeignKey(  
-     to='sw_cart.Cart',   verbose_name=("Корзина"), on_delete=models.CASCADE, blank=True, null=True, related_name="items",
-    )
-  order    = models.ForeignKey(  
-     to='sw_order.Order', verbose_name=('Замовлення'),   on_delete=models.CASCADE, blank=True, null=True, related_name="cart_items",
-    )
-  item     = models.ForeignKey(  
-     to="sw_catalog.Item",   verbose_name=('Товар'),   
-     on_delete=models.CASCADE, 
-     blank=False, null=False, 
-     related_name="cart_items",
-    )
-  quantity = models.IntegerField(
-    verbose_name=_('Кількість'), default=1,
-  )
-  created  = models.DateTimeField(
-    verbose_name=_('Дата создания'),  default=timezone.now
-  )
-  updated  = models.DateTimeField(
-    verbose_name=_('Дата обновления'),auto_now_add=False, 
-    auto_now=True,  blank=True, null=True
-  )
-  
-  def get_attributes(self):
-    return CartItemAttribute.objects.filter(cart_item=self)
-
-  def get_attribute(self, attr_code):
-    try:
-        attr = CartItemAttribute.objects.get(
-            cart_item=self,
-            attribute_name=ItemAttribute.objects.get(item=self.item,attribute__code=attr_code),
-        ) 
-    except:
-        attr = None 
-    return attr 
-
-  @property
-  def total_price(self):
-    total_price = float(self.price_of_quantity) + float(self.price_of_attributes)
-    return total_price 
-
-  @property
-  def price_of_quantity(self):
-    total_price = self.price_per_item * self.quantity
-    return total_price
-  
-  @property
-  def price_of_attributes(self):
-    price = 0
-    for cart_item_attribute in CartItemAttribute.objects.filter(cart_item=self):
-      for value in cart_item_attribute.values.all():
-        price += float(value.price)
-      if cart_item_attribute.value:
-        price += float(cart_item_attribute.value.price)
-    return price 
-
-  @property
-  def price_per_item(self):
-    price_per_item = self.item.get_cart_price()
-    attrs = self.get_attributes().aggregate(Sum('price'))['price__sum']
-    if attrs:
-      price_per_item += attrs
-    return price_per_item 
-
-  @property
-  def currency(self):
-    return self.cart.currency
-
-  def get_currency(self):
-    return self.cart.get_currency()
-
-  def __str__(self):
-    return f'''
-      {self.item.title}, {self.quantity}, {self.total_price} {self.item.currency}
-      {self.get_attributes()}
-    '''
-
-  class Meta: 
-    verbose_name = _('Товар в корзині')
-    verbose_name_plural = _('Товари в корзині')
-
-
-class FavourItem(models.Model):
-  item = models.ForeignKey("sw_catalog.Item", on_delete=models.CASCADE, verbose_name='Улюблені товари', blank=True, null=True, related_name="favour_items")
-  cart = models.ForeignKey('sw_cart.Cart', on_delete=models.CASCADE, verbose_name='Улюблені товари', blank=True, null=True, related_name="favour_items")
-  
-  def __str__(self):
-    return f'{self.item.title}'
-
-  class Meta:
-    verbose_name=_("Улюблений товар")
-    verbose_name_plural=_("Улюблені товари")
-
-
-'''
-
-
-attributes: [
-    {
-        "item_attribute_id":int,
-        "item_attribute_value_id":int, 
-    },
-    {
-        "item_attribute_id":int,
-        "item_attribute_value_id":int, 
-    },
-    {
-        "item_attribute_id":int,
-        "item_attribute_value_ids":[int,int,int,...,int], 
-    },
-    {
-        "item_attribute_id":int,
-        "item_attribute_value_ids":[int,int,int,...,int], 
-    },
-    {
-        "item_attribute_id":int,
-        "item_attribute_value_ids":[int,int,int,...,int], 
-    },
-    {
-        "item_attribute_id":int,
-        "item_attribute_value_ids":[int,int,int,...,int], 
-    },
-]
-
-'''
 
