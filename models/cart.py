@@ -17,7 +17,7 @@ from sw_cart.models.cart_item import CartItem
 from sw_cart.models.cart_item_attribute import CartItemAttribute
 
 
-class AbstractCart(models.Model):
+class Cart(models.Model):
     user = models.ForeignKey(
         verbose_name=_("Користувач"), to=get_user_model(), on_delete=models.SET_NULL,
         related_name='carts', blank=True, null=True,
@@ -43,7 +43,6 @@ class AbstractCart(models.Model):
     class Meta:
         verbose_name = _('Корзина')
         verbose_name_plural = _('Корзини')
-        abstract = True
 
     def create_cart_items_with_attributes(self, item, quantity, attributes):
         cart_item = CartItem.objects.create(item=item, cart=self)
@@ -282,25 +281,3 @@ class AbstractCart(models.Model):
 
     def get_currency(self):
         return Currency.objects.get(is_main=True)
-
-
-if True:
-# if settings.SW_CART_OBJECTS['Cart'] == 'sw_cart.models.cart.Cart'
-    class Cart(AbstractCart):
-        pass
-else:
-    from sw_utils import get_object
-
-    def get_object(app_name, klass_name):
-        cart_objects = settings.SW_CART_OBJECTS
-        app_classes = cart_objects[app_name]
-        klass = app[klass_name]
-        module, klass = klass.rsplit('.', 1)
-        module = import_module(module)
-        object_ = getattr(module, klass)
-        return object_
-
-    Cart = get_object('sw_cart', 'Cart')
-
-
-
